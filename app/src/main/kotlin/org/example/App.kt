@@ -5,6 +5,17 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 import org.json.JSONArray
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.from
+import kotlinx.serialization.decodeFromString
+
+// ./gradlew run
 
 class FetchData(
     private val dataset: String,
@@ -55,7 +66,7 @@ sealed class MergeValue {
     data class NestedMap(val data: MutableMap<String, MutableList<Int>>) : MergeValue()
 }
 
-suspend fun fetchElectricityData(){
+suspend fun fetchElectricityData(): Map<String, MergeValue> {
     val api_Key = ""
 
     val electrictyConsumptionToday = FetchData(
@@ -99,7 +110,7 @@ suspend fun fetchElectricityData(){
 
     val waterProductionTodayResult = waterProduction.fetch()
 
-    val production_v_consumption: MutableMap<Int, Int> = electrictyProductionTodayResult.zip(electrictyProductionTodayResult).toMap().toMutableMap()
+    val production_v_consumption: MutableMap<Int, Int> = electrictyProductionTodayResult.zip(electrictyConsumptionTodayResult).toMap().toMutableMap()
     val productions: MutableMap<String, MutableList<Int>> = mutableMapOf()
     val merge: MutableMap<String, MergeValue> = mutableMapOf()  
 
@@ -109,9 +120,35 @@ suspend fun fetchElectricityData(){
 
     merge["tuotanto_v_kulutus"] = MergeValue.IntMap(production_v_consumption)
     merge["tuotanto"] = MergeValue.NestedMap(productions)
-
+    return merge
 }
+
+
+@Serializable
+data class Note(
+    val id: Int,
+    val body: String
+)
 
 fun main() = runBlocking {
-    fetchElectricityData()
+    val result = fetchElectricityData()
+
+    val production = result["tuotanto"]
+    if(production is MergeValue.NestedMap) {
+        val data  = production.data
+        println("Tuotanto data: $data")
+    }
+ 
+     val supabase = createSupabaseClient(
+        supabaseUrl = "",
+        supabaseKey = ""
+    ) {
+        install(Postgrest)
+    } 
+
+    val response = supabase.postgrest.from("notes").select()
+
+     println("Data: ${response.data}")
 }
+
+
